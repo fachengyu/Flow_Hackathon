@@ -118,10 +118,13 @@ class DDiTBlock(nn.Module):
         nn.init.zeros_(self.adaLN_mod.weight)
         nn.init.zeros_(self.adaLN_mod.bias)
 
-    def forward(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, c: torch.Tensor,
+                attn_mask: torch.Tensor = None) -> torch.Tensor:
         """
-        x: [B, L, D]  token representations
-        c: [B, cond_dim]  timestep conditioning
+        x:         [B, L, D]  token representations
+        c:         [B, cond_dim]  timestep conditioning
+        attn_mask: [B, L] bool, True = valid token (optional)
+                   When provided, PAD positions are masked out of attention keys.
         """
         mods = self.adaLN_mod(c).unsqueeze(1)              # [B, 1, 6*D]
         shift1, scale1, gate1, shift2, scale2, gate2 = mods.chunk(6, dim=-1)
@@ -132,9 +135,16 @@ class DDiTBlock(nn.Module):
         qkv = self.attn_qkv(h).reshape(B, L, 3, self.n_heads, self.head_dim)
         q, k, v = qkv.unbind(dim=2)                        # each [B, L, H, d_head]
         q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
-        # Full bidirectional attention — every token attends to every other token
+        # Build additive bias mask: 0 for valid keys, -inf for PAD keys.
+        sdpa_mask = None
+        if attn_mask is not None:
+            # attn_mask: [B, L] bool (True = valid). Shape [B, 1, 1, L] for broadcasting over heads/queries.
+            sdpa_mask = torch.zeros(attn_mask.shape[0], 1, 1, attn_mask.shape[1],
+                                    device=q.device, dtype=q.dtype)
+            sdpa_mask.masked_fill_(~attn_mask[:, None, None, :], float('-inf'))
         attn = F.scaled_dot_product_attention(
-            q, k, v, dropout_p=self.dropout if self.training else 0.0
+            q, k, v, attn_mask=sdpa_mask,
+            dropout_p=self.dropout if self.training else 0.0
         )
         attn = attn.transpose(1, 2).reshape(B, L, D)
         x = x + gate1 * F.dropout(self.attn_out(attn), p=self.dropout, training=self.training)
@@ -143,6 +153,8 @@ class DDiTBlock(nn.Module):
         h = self.norm2(x) * (1 + scale2) + shift2
         x = x + gate2 * F.dropout(self.mlp(h), p=self.dropout, training=self.training)
         return x
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -184,19 +196,27 @@ class MDLMBackbone(nn.Module):
         nn.init.zeros_(self.output_proj.weight)
         nn.init.zeros_(self.output_proj.bias)
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, t: torch.Tensor,
+                seq_lens: torch.Tensor = None) -> torch.Tensor:
         """
-        x: [B, L]  int token ids (may contain MASK_ID)
-        t: [B]     float timesteps in [0, 1]
-        returns:   [B, L, vocab_size] raw logits
+        x:        [B, L]  int token ids (may contain MASK_ID or PAD_ID)
+        t:        [B]     float timesteps in [0, 1]
+        seq_lens: [B]     number of valid (non-PAD) tokens per sequence (optional).
+                          When provided, PAD positions are excluded from attention keys.
+        returns:  [B, L, vocab_size] raw logits
         """
-        L = x.shape[1]
+        B, L = x.shape
         pos = torch.arange(L, device=x.device)
         h = self.vocab_embed(x) + self.pos_embed(pos)   # [B, L, D]
         c = F.silu(self.sigma_map(t))                    # [B, cond_dim]
 
+        # Build boolean validity mask: True = valid token, False = PAD
+        attn_mask = None
+        if seq_lens is not None:
+            attn_mask = torch.arange(L, device=x.device)[None, :] < seq_lens[:, None]  # [B, L]
+
         for block in self.blocks:
-            h = block(h, c)
+            h = block(h, c, attn_mask=attn_mask)
 
         # Final projection with AdaLN
         h = self.norm_final(h)
