@@ -1,24 +1,13 @@
-# OT flow matching on Allen Ca embeddings
+## Signal Data
 
-Trains the same **optimal-transport conditional flow** (stochastic interpolant) as
-`synthetic_gaussian/solution/gaussian_model.py`: sample `x0 ~ N(0,I)`, target `x1` =
-standardized **VISp** Ca embeddings, MSE on the OT velocity, then **Euler** integrate from
-noise toward the data distribution.
+We use Allen data consisting of Ca (30 Hz) and Neuropixels (120Hz) recording from pseudomice (stacked neurons from multiple mice), recorded while the Natural Movie1 stimulus (30sec, 30Hz) was passively shown during 10 repeats. The tutorial of loading Allen data and training corresponding encoders can be found below.
+<https://cebra.ai/docs/demo_notebooks/Demo_Allen.html>
 
-| File | Role |
-|------|------|
-| `signal_model.py` | `MLP_Residual`, `cfm_loss`, `integrate_euler`, `sample` |
-| `fda_evaluation.py` | Optional **R² %** + few-trial kNN sweep (`fda_metrics_sweep`) |
-| `signal_decode.py` | `allen_frame_id_decode` (`modality='ca'`) |
-| Data | `../data/allen_data/VISp_*_ca_*_{train,test}.npy` (see notebook) |
+As an example, we jointly train Ca and Neuropixels using two cortexes, VISp and VISrl, and save the corresponding embeddings on which we train flows. These embeddings can be found
 
-## Run
-
-```bash
-cd Flow_Hackathon/signal_flow
-jupyter lab signal_walkthrough.ipynb
+```text
+├── data/
+│   └──allen_data/
 ```
 
-## Citation (Gaussian hackathon reference)
-
-The interpolant and loss match the synthetic Gaussian walkthrough / Lipman et al. OT-CFM setup used in `synthetic_gaussian/solution/gaussian_model.py`.
+In the walkthrough notebook, we use Algorithm 1 and Algorithm 2 from stochastic interpolants <https://arxiv.org/pdf/2310.03725> to build the flow from VISp Ca embeddings to VISrl Ca embeddings, and we evaluate the flow performance by knn accuracy, MSE, and FID.
