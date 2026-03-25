@@ -2,8 +2,7 @@
 
 Trains the same **optimal-transport conditional flow** (stochastic interpolant) as
 `synthetic_gaussian/solution/gaussian_model.py`: sample `x0 ~ N(0,I)`, target `x1` =
-standardized **VISp** Ca embeddings, MSE on the OT velocity, then **Euler** integrate from
-noise toward the data distribution.
+some block covariance Gaussian.
 
 | File | Role |
 |------|------|
