@@ -5,6 +5,9 @@ Provides train/test DataLoaders that return images normalized to [0, 1]
 and integer class labels in {0, ..., 9}.
 """
 
+import ssl
+from pathlib import Path
+
 import torch
 from torch.utils.data import DataLoader
 import torchvision
@@ -15,7 +18,7 @@ IMG_SIZE = 28
 NUM_CLASSES = 10
 
 
-def get_mnist_loaders(batch_size: int = 128, root: str = "./data"):
+def get_mnist_loaders(batch_size: int = 128, root: str | None = None):
     """
     Download MNIST and return (train_loader, test_loader).
 
@@ -24,12 +27,41 @@ def get_mnist_loaders(batch_size: int = 128, root: str = "./data"):
     """
     transform = T.Compose([T.ToTensor()])
 
-    train_ds = torchvision.datasets.MNIST(
-        root=root, train=True, download=True, transform=transform,
-    )
-    test_ds = torchvision.datasets.MNIST(
-        root=root, train=False, download=True, transform=transform,
-    )
+    # Default to the module-local data dir so notebooks work from any cwd.
+    data_root = Path(root).expanduser() if root is not None else Path(__file__).resolve().parent / "data"
+
+    try:
+        # Prefer existing local files and avoid network calls when possible.
+        train_ds = torchvision.datasets.MNIST(
+            root=str(data_root), train=True, download=False, transform=transform,
+        )
+        test_ds = torchvision.datasets.MNIST(
+            root=str(data_root), train=False, download=False, transform=transform,
+        )
+    except RuntimeError:
+        try:
+            train_ds = torchvision.datasets.MNIST(
+                root=str(data_root), train=True, download=True, transform=transform,
+            )
+            test_ds = torchvision.datasets.MNIST(
+                root=str(data_root), train=False, download=True, transform=transform,
+            )
+        except RuntimeError as err:
+            # Some cluster images miss CA roots; fallback to unverified SSL only for this download.
+            if "CERTIFICATE_VERIFY_FAILED" not in str(err):
+                raise
+
+            original_https_context = ssl._create_default_https_context
+            ssl._create_default_https_context = ssl._create_unverified_context
+            try:
+                train_ds = torchvision.datasets.MNIST(
+                    root=str(data_root), train=True, download=True, transform=transform,
+                )
+                test_ds = torchvision.datasets.MNIST(
+                    root=str(data_root), train=False, download=True, transform=transform,
+                )
+            finally:
+                ssl._create_default_https_context = original_https_context
 
     train_loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True,
