@@ -115,7 +115,7 @@ def wasserstein_error(generated: np.ndarray, n_real: int = 5000, seed: int = 0) 
     }
 
 
-def evaluate(generated, n_real: int = 5000) -> dict:
+def evaluate(generated, Sigma, n_real: int = 5000) -> dict:
     """
     Run all evaluation metrics on a set of generated samples.
 
@@ -135,6 +135,6 @@ def evaluate(generated, n_real: int = 5000) -> dict:
         generated = generated.cpu().numpy()
 
     metrics = {}
-    metrics.update(covariance_error(generated))
+    metrics.update(covariance_error(Sigma, generated))
     metrics.update(wasserstein_error(generated, n_real=n_real))
     return metrics
