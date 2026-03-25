@@ -34,19 +34,14 @@ def _build_sigma(N, block_size, rho):
     return Sigma
 
 
-# precompute once at import time
-Sigma = _build_sigma(N, BLOCK_SIZE, RHO)
-# Sigma = L @ L.T
-L     = np.linalg.cholesky(Sigma)
-
-
-def get_gaussian_dataset(n_samples: int, seed: int = 42) -> np.ndarray:
+def get_gaussian_dataset(Sigma: np.ndarray, n_samples: int, seed: int = 42) -> np.ndarray:
     """
     Sample n_samples flat vectors from N(0, Sigma).
 
     Returns:
         numpy array of shape (n_samples, DIM), dtype float32
     """
+    L = np.linalg.cholesky(Sigma)
     rng = np.random.default_rng(seed)
     Z   = rng.standard_normal((DIM, n_samples))
     X   = (L @ Z).T
@@ -72,7 +67,7 @@ class GaussianDataset(Dataset):
 
 # evaluation metric
 
-def covariance_error(generated: np.ndarray) -> dict:
+def covariance_error(Sigma: np.ndarray, generated: np.ndarray) -> dict:
     """
     Compare the empirical covariance of generated samples to the true Sigma.
 
