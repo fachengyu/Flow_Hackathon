@@ -88,22 +88,22 @@ def cfm_loss(model: MLP_Residual, x1: torch.Tensor) -> torch.Tensor:
     """
 
     # TODO: sample base distribution
-    x0 = ...
+    x0 = torch.randn_like(x1)
 
     # TODO: sample time
-    t = ...
+    t = torch.rand(x1.shape[0], device=x1.device)
 
     # TODO: compute sigma_t = 1 - (1 - SIGMA_MIN) * t
-    sigma_t = ...
+    sigma_t = 1 - (1 - SIGMA_MIN) * t[:, None]
 
     # TODO: compute interpolated point x_t
-    x_t = ...
+    x_t = sigma_t*x0 + t[:,None]*x1
 
     # TODO: compute target velocity
-    target = ...
+    target = x1 - (1-SIGMA_MIN)*x0
 
     # TODO: compute and return loss
-    loss = ...
+    loss = ((model(x_t, t) - target)**2).mean()
     return loss
 
 
@@ -127,19 +127,19 @@ def sample(model: MLP_Residual, n_samples: int,
     """
 
     # TODO (Exercise 3): put the model in evaluation mode
-    ...
+    model.eval()
 
     # TODO (Exercise 3): sample initial points x of shape [n_samples, DIM]
-    x = ...
+    x = torch.randn(n_samples, DIM, device=device)
 
     # TODO (Exercise 3): set the Euler step size
-    dt = ...
+    dt = 1.0 / n_steps
 
     for i in range(n_steps):
         # TODO (Exercise 3): create the time vector of shape [n_samples]
-        t = ...
+        t = torch.full((n_samples,), i / n_steps, device=device)
 
         # TODO (Exercise 3): perform one Euler update step
-        x = ...
+        x = x + model(x, t) * dt
 
     return x
