@@ -1,3 +1,4 @@
+
 """
 Synthetic Gaussian dataset with block covariance structure.
 Provides dataset generation, a PyTorch Dataset class, and
@@ -89,7 +90,7 @@ def covariance_error(Sigma: np.ndarray, generated: np.ndarray) -> dict:
     }
 
 
-def wasserstein_error(generated: np.ndarray, n_real: int = 5000, seed: int = 0) -> dict:
+def wasserstein_error(Sigma: np.ndarray, generated: np.ndarray, n_real: int = 5000, seed: int = 0) -> dict:
     """
     Estimate the 1D marginal Wasserstein distance between generated samples
     and true samples from N(0, Sigma), averaged over all DIM dimensions.
@@ -104,7 +105,7 @@ def wasserstein_error(generated: np.ndarray, n_real: int = 5000, seed: int = 0) 
             mean_wasserstein  - average 1D Wasserstein across all dimensions
             max_wasserstein   - worst dimension
     """
-    real      = get_gaussian_dataset(n_real, seed=seed)
+    real      = get_gaussian_dataset(Sigma, n_real, seed=seed)
     distances = np.array([
         wasserstein_distance(real[:, d], generated[:, d])
         for d in range(DIM)
@@ -115,7 +116,7 @@ def wasserstein_error(generated: np.ndarray, n_real: int = 5000, seed: int = 0) 
     }
 
 
-def evaluate(generated, n_real: int = 5000) -> dict:
+def evaluate(generated, Sigma, n_real: int = 5000) -> dict:
     """
     Run all evaluation metrics on a set of generated samples.
 
@@ -135,6 +136,6 @@ def evaluate(generated, n_real: int = 5000) -> dict:
         generated = generated.cpu().numpy()
 
     metrics = {}
-    metrics.update(covariance_error(generated))
-    metrics.update(wasserstein_error(generated, n_real=n_real))
+    metrics.update(covariance_error(Sigma, generated))
+    metrics.update(wasserstein_error(Sigma, generated, n_real=n_real))
     return metrics
